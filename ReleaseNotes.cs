@@ -42,6 +42,34 @@ namespace Octokit.ReleaseNotes
                 throw new InvalidOperationException("Oops");
             }
 
+            var releaseNotesLookup = new Dictionary<int, List<string>>();
+            var pullRequestsWithoutReleaseNotes = new List<CachedPullRequest>();
+
+            foreach (var pr in mergedPulls)
+            {
+                var comments = pr.Value.Comments.Where(x => x.Body.ToLower().StartsWith("release_notes:"));
+
+                if (!comments.Any())
+                {
+                    pullRequestsWithoutReleaseNotes.Add(pr.Value);
+                }
+                else
+                {
+                    var releaseNotes = comments.Select(c => c.Body.Substring("release_notes:".Length + 1).Trim()).ToList();
+                    releaseNotesLookup.Add(pr.Key, releaseNotes);
+                }
+            }
+
+            if (pullRequestsWithoutReleaseNotes.Any())
+            {
+                Console.WriteLine("These pull requests do not have any relevant release notes set. Please review them and try again:");
+                foreach (var pr in pullRequestsWithoutReleaseNotes)
+                {
+                    Console.WriteLine($"#{pr.PullRequest.Number} - {pr.PullRequest.Title}");
+                }
+
+                throw new InvalidOperationException("Oops");
+            }
 
             var contribs = mergedPulls.SelectMany(x => x.Value.Contributors.Select(y => y.Login)).Distinct().ToList();
 
@@ -101,13 +129,23 @@ namespace Octokit.ReleaseNotes
                                     .OrderBy(x => x))
                             .Distinct();
 
+                        List<string> releaseNotes;
+
+                        var number = pull.PullRequest.Number;
+
                         // Some PR's might have multiple "release_notes" comments, meaning multiple entries
-                        var numberOfEntries = GetNumberReleaseNotes(pull);
-                        for (var idx = 0; idx < numberOfEntries; idx++)
+                        var found = releaseNotesLookup.TryGetValue(number, out releaseNotes);
+
+                        if (!found)
+                        {
+                            throw new InvalidOperationException($"Could not find release notes for PR #{number}");
+                        }
+
+                        foreach (var releaseNote in releaseNotes)
                         {
                             sb.AppendFormat("- {0} - [#{1}]({2}) via {3}\r\n",
-                                FormatPulllRequestDescription(pull, idx),
-                                pull.PullRequest.Number,
+                                releaseNote,
+                                number,
                                 pull.PullRequest.HtmlUrl,
                                 string.Join(", ", contributors));
                         }
@@ -138,20 +176,6 @@ namespace Octokit.ReleaseNotes
         {
             var comments = pull.Comments.Where(x => x.Body.ToLower().StartsWith("release_notes:"));
             return Math.Max(1, comments.Count());
-        }
-
-        private string FormatPulllRequestDescription(CachedPullRequest pull, int index)
-        {
-            // Use "release_notes" comment if exists, otherwise PR title
-            var comments = pull.Comments.Where(x => x.Body.ToLower().StartsWith("release_notes:"));
-            if (comments.Count() <= 0)
-            {
-                throw new Exception($"PR #{pull.PullRequest.Number} does not have a release_notes entry!");
-            }
-            else
-            {
-                return comments.ToList()[index].Body.Substring("release_notes:".Length + 1).Trim();
-            }
         }
 
         public string FormatLabelCategory(LabelCategory category)
