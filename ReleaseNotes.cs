@@ -23,10 +23,25 @@ namespace Octokit.ReleaseNotes
             // Get merged PR's between specified refs
             var mergedPulls = await GetMergedPullRequestsBetween2Refs(owner, repo, from, to, batchSize);
 
+
             // Remove "skip-release-notes" PR's
             mergedPulls = mergedPulls
                 .Where(x => !x.Value.Labels.Contains("skip-release-notes"))
                 .ToDictionary(x => x.Key, x => x.Value);
+
+            var pullRequestsWithoutCategory = mergedPulls.Values.Where(x => x.Category == LabelCategory.Unknown);
+
+            if (pullRequestsWithoutCategory.Any())
+            {
+                Console.WriteLine("These pull requests do not have a relevant label assigned. Please review them and try again:");
+                foreach (var pr in pullRequestsWithoutCategory)
+                {
+                    Console.WriteLine($"#{pr.PullRequest.Number} - {pr.PullRequest.Title}");
+                }
+
+                throw new InvalidOperationException("Oops");
+            }
+
 
             var contribs = mergedPulls.SelectMany(x => x.Value.Contributors.Select(y => y.Login)).Distinct().ToList();
 
@@ -206,7 +221,15 @@ namespace Octokit.ReleaseNotes
             public IEnumerable<string> Labels { get; set; }
 
             // The category of the PR
-            public LabelCategory Category { get { return IsFeature() ? LabelCategory.Feature : IsBugFix() ? LabelCategory.BugFix : IsHousekeeping() ? LabelCategory.Housekeeping : IsDoc() ? LabelCategory.DocumentationUpdate : throw new Exception($"PR #{this.PullRequest.Number} has unknown label!")/* LabelCategory.Unknown*/; } }
+            public LabelCategory Category {
+                get {
+                    return IsFeature() ? LabelCategory.Feature
+                            : IsBugFix() ? LabelCategory.BugFix
+                            : IsHousekeeping() ? LabelCategory.Housekeeping
+                            : IsDoc() ? LabelCategory.DocumentationUpdate
+                            : LabelCategory.Unknown;
+                }
+            }
 
             public bool IsFeature()
             {
