@@ -29,7 +29,7 @@ namespace Octokit.ReleaseNotes
                 .ToDictionary(x => x.Key, x => x.Value);
 
             var contribs = mergedPulls.SelectMany(x => x.Value.Contributors.Select(y => y.Login)).Distinct().ToList();
-            
+
             Console.WriteLine();
             Console.WriteLine($"Release Stats: {mergedPulls.Count} pull requests from {contribs.Count} contributors!");
             Console.WriteLine();
@@ -268,7 +268,7 @@ namespace Octokit.ReleaseNotes
                 return Task.Run(async () =>
                 {
                     var events = await this.GitHubClient.Issue.Events.GetAllForIssue(owner, repository, issue.Number);
-                    return new KeyValuePair<int, EventInfo>(issue.Number, events.FirstOrDefault(x => x.Event == EventInfoState.Merged));
+                    return new KeyValuePair<int, IssueEvent>(issue.Number, events.FirstOrDefault(x => x.Event == EventInfoState.Merged));
                 });
             });
             var mergeEvents = await Task.WhenAll(eventsTasks);
